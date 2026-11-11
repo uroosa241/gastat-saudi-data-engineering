@@ -1,0 +1,15 @@
+{
+	"name": "adf-gatasat-ksa",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true
+		}
+	},
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "5f542602-d933-4879-88ce-8624b5ac5fdc",
+		"tenantId": "92692236-8032-43ab-ae32-650909676a8c"
+	}
+}

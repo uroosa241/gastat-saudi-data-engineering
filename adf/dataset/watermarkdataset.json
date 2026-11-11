@@ -1,0 +1,21 @@
+{
+	"name": "watermarkdataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ADLjsonapi",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "watermark.json",
+				"folderPath": "watermark",
+				"fileSystem": "config"
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,361 @@
+{
+	"name": "gastat_master_pipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "LKP_GET_PIPELINE_FILTER",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "v_run_status",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_GASTAT_PIPELINE_CONFIG",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "FE_EACH_PROCESS",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "LKP_GET_PIPELINE_FILTER",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('LKP_GET_PIPELINE_FILTER').output.value[0].indicators",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "COPY_GASTAT_TO_BRONZE",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "RestSource",
+									"httpRequestTimeout": "00:01:40",
+									"requestInterval": "00.00:00:00.010",
+									"requestMethod": "GET",
+									"paginationRules": {
+										"supportRFC5988": "true"
+									}
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "apidataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"p_relative_url": {
+											"value": "@concat('/v1/stats/', item().indicator_code)",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "adlsdataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"p_container": {
+											"value": "@activity('LKP_GET_PIPELINE_FILTER').output.value[0].storage.container_raw",
+											"type": "Expression"
+										},
+										"p_directory": {
+											"value": "@replace(item().raw_path, 'raw/', '')",
+											"type": "Expression"
+										},
+										"p_file_name": {
+											"value": "data.json",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "LK_WATERMARK",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "p_container",
+									"value": "config"
+								},
+								{
+									"name": "p_directory",
+									"value": "watermark"
+								},
+								{
+									"name": "p_file_name",
+									"value": "watermark.json"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"storeSettings": {
+										"type": "AzureBlobFSReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"dataset": {
+									"referenceName": "watermarkdataset",
+									"type": "DatasetReference"
+								},
+								"firstRowOnly": false
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "v_run_start_time",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "v_pipeline_name",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_run_start_time",
+					"value": {
+						"value": "@utcNow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "v_run_end_time",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "FE_EACH_PROCESS",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "SET_RUN_END_TIME",
+					"value": {
+						"value": "@utcNow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "v_run_status",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "v_run_start_time",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_run_status",
+					"value": "RUNNING"
+				}
+			},
+			{
+				"name": "v_run_id",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_run_id",
+					"value": {
+						"value": "@pipeline().RunId",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "v_pipeline_name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "v_run_id",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_pipeline_name",
+					"value": {
+						"value": "@pipeline().Pipeline",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "SET_STATUS_SUCCESS",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "v_run_end_time",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "SET_STATUS_SUCCESS",
+					"value": "SUCCESS"
+				}
+			},
+			{
+				"name": "SET_STATUS_FAILED",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "FE_EACH_PROCESS",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "SET_STATUS_FAILED",
+					"value": "FAILED"
+				}
+			}
+		],
+		"variables": {
+			"v_error_message": {
+				"type": "String"
+			},
+			"v_run_start_time": {
+				"type": "String"
+			},
+			"v_run_status": {
+				"type": "String"
+			},
+			"v_run_id": {
+				"type": "String"
+			},
+			"v_pipeline_name": {
+				"type": "String"
+			},
+			"SET_STATUS_SUCCESS": {
+				"type": "String"
+			},
+			"SET_RUN_END_TIME": {
+				"type": "String"
+			},
+			"v_run_failed": {
+				"type": "String"
+			},
+			"SET_STATUS_FAILED": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-11-09T06:42:29Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

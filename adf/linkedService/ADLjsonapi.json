@@ -1,0 +1,11 @@
+{
+	"name": "ADLjsonapi",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://stgastsaudi12.dfs.core.windows.net/"
+		}
+	}
+}
