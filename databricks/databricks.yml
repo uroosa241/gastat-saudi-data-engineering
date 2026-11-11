@@ -1,0 +1,30 @@
+bundle:
+  name: gastat_pipeline
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for silver and gold tables
+    default: gastatksa
+  silver_schema:
+    description: Silver schema name
+    default: silver
+  gold_schema:
+    description: Gold schema name
+    default: gold
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog: gastatksa
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: gastatksa

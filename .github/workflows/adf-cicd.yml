@@ -1,0 +1,114 @@
+name: adf-cicd
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "adf/**"
+  push:
+    branches: [main]
+    paths:
+      - "adf/**"
+
+permissions:
+  contents: read
+
+env:
+  SUBSCRIPTION_ID: <sub-id>
+  RG_DEV: <rg-dev>
+  RG_PROD: <rg-prod>
+  ADF_DEV_NAME: <adf-dev-name>
+  ADF_PROD_NAME: <adf-prod-name>
+
+jobs:
+  build:
+    name: Validate and export ARM template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install ADF utilities
+        working-directory: adf/build
+        run: npm install
+
+      - name: Validate factory resources
+        working-directory: adf/build
+        run: >
+          npm run build validate ${{ github.workspace }}/adf
+          /subscriptions/${{ env.SUBSCRIPTION_ID }}/resourceGroups/${{ env.RG_DEV }}/providers/Microsoft.DataFactory/factories/${{ env.ADF_DEV_NAME }}
+
+      - name: Export ARM template
+        working-directory: adf/build
+        run: >
+          npm run build export ${{ github.workspace }}/adf
+          /subscriptions/${{ env.SUBSCRIPTION_ID }}/resourceGroups/${{ env.RG_DEV }}/providers/Microsoft.DataFactory/factories/${{ env.ADF_DEV_NAME }}
+          "ExportedArmTemplate"
+
+      - name: Upload ARM template artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExportedArmTemplate
+          path: adf/build/ExportedArmTemplate
+          if-no-files-found: error
+
+  deploy-prod:
+    name: Deploy ADF to prod
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Download ARM template artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ExportedArmTemplate
+          path: ExportedArmTemplate
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ env.SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+          enable-AzPSSession: true
+
+      - name: Stop ADF triggers (pre-deployment)
+        uses: azure/powershell@v2
+        with:
+          azPSVersion: latest
+          inlineScript: |
+            ./ExportedArmTemplate/PrePostDeploymentScript.Ver2.ps1 `
+              -armTemplate "./ExportedArmTemplate/ARMTemplateForFactory.json" `
+              -ResourceGroupName "${{ env.RG_PROD }}" `
+              -DataFactoryName "${{ env.ADF_PROD_NAME }}" `
+              -predeployment $true `
+              -deleteDeployment $false
+
+      - name: Deploy ARM template (Incremental)
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          subscriptionId: ${{ env.SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ env.RG_PROD }}
+          template: ./ExportedArmTemplate/ARMTemplateForFactory.json
+          parameters: >-
+            ./ExportedArmTemplate/ARMTemplateParametersForFactory.json
+            factoryName=${{ env.ADF_PROD_NAME }}
+            ADLjsonapi_properties_typeProperties_url=https://<prod-storage-account>.dfs.core.windows.net/
+            gatsatapi_properties_typeProperties_url=https://api.stats.gov.sa
+          deploymentMode: Incremental
+          deploymentName: adf-${{ github.run_number }}
+
+      - name: Restart ADF triggers (post-deployment)
+        uses: azure/powershell@v2
+        with:
+          azPSVersion: latest
+          inlineScript: |
+            ./ExportedArmTemplate/PrePostDeploymentScript.Ver2.ps1 `
+              -armTemplate "./ExportedArmTemplate/ARMTemplateForFactory.json" `
+              -ResourceGroupName "${{ env.RG_PROD }}" `
+              -DataFactoryName "${{ env.ADF_PROD_NAME }}" `
+              -predeployment $false `
+              -deleteDeployment $true
