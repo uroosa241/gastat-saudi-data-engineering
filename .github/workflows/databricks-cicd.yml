@@ -1,0 +1,92 @@
+name: databricks-cicd
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "databricks/**"
+      - "tests/**"
+      - "requirements-dev.txt"
+      - ".github/workflows/databricks-cicd.yml"
+  push:
+    branches: [main]
+    paths:
+      - "databricks/**"
+      - "tests/**"
+      - "requirements-dev.txt"
+      - ".github/workflows/databricks-cicd.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: databricks-cicd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate bundle
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+      DATABRICKS_AUTH_TYPE: azure-client-secret
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: pytest tests -q
+
+      - uses: databricks/setup-cli@main
+
+      - name: Validate bundle (dev)
+        working-directory: databricks
+        run: databricks bundle validate -t dev
+
+  deploy-dev:
+    name: Deploy to dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+      DATABRICKS_AUTH_TYPE: azure-client-secret
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Deploy bundle (dev)
+        working-directory: databricks
+        run: databricks bundle deploy -t dev
+
+  deploy-prod:
+    name: Deploy to prod
+    needs: deploy-dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_PROD == 'true'
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
+      DATABRICKS_AUTH_TYPE: azure-client-secret
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Deploy bundle (prod)
+        working-directory: databricks
+        run: databricks bundle deploy -t prod

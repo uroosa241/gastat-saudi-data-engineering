@@ -1,0 +1,8 @@
+{
+  "source_name": "gdp_income",
+  "raw_path": "abfss://raw@stgastsaudi12.dfs.core.windows.net/gastat/gdp_income/",
+  "bronze_table": "<catalog>.bronze.gdp_income",
+  "silver_table": "<catalog>.silver.gdp_income",
+  "key_columns": ["<key_column_1>", "<key_column_2>", "<key_column_3>"],
+  "watermark_column": "<watermark_column>"
+}

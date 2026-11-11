@@ -1,0 +1,12 @@
+{
+  "name": "gastat-adf-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Validate and export the GASTAT ADF factory as an ARM template",
+  "scripts": {
+    "build": "node node_modules/@microsoft/azure-data-factory-utilities/lib/index"
+  },
+  "dependencies": {
+    "@microsoft/azure-data-factory-utilities": "^1.0.0"
+  }
+}

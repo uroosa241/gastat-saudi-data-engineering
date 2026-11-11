@@ -1,0 +1,16 @@
+# Databricks bundle state
+.databricks/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local secrets
+.env
+
+# Node (ADF build)
+node_modules/
+
+# ADF exported ARM template (built in CI)
+ExportedArmTemplate/
